@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export type SubscriptionTier = 'free' | 'basic' | 'premium';
 
@@ -39,9 +40,12 @@ export const useSubscription = () => {
       }
 
       if (data) {
+        // Cast the string to the correct type to ensure it's a valid SubscriptionTier
+        const subscriptionTier = data.subscription_tier as SubscriptionTier || 'free';
+        
         const subscriptionData: Subscription = {
           subscribed: data.subscribed,
-          subscription_tier: data.subscription_tier || 'free',
+          subscription_tier: subscriptionTier,
           subscription_end: data.subscription_end,
         };
         setSubscription(subscriptionData);

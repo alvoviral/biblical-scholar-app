@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
@@ -17,91 +17,97 @@ import {
   Search, 
   Headphones, 
   BookMarked, 
-  Share 
+  Share,
+  Download
 } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Example Bible data (in a real app, this would come from an API)
-const booksList = [
-  { id: 'genesis', name: 'Gênesis', chapters: 50 },
-  { id: 'exodus', name: 'Êxodo', chapters: 40 },
-  { id: 'leviticus', name: 'Levítico', chapters: 27 },
-  // More books would be added here
-];
-
-// Sample Bible text for Gênesis 1 (in a real app, this would come from an API)
-const sampleBibleText = [
-  { verse: 1, text: 'No princípio, criou Deus os céus e a terra.' },
-  { verse: 2, text: 'A terra, porém, estava sem forma e vazia; havia trevas sobre a face do abismo, e o Espírito de Deus pairava sobre as águas.' },
-  { verse: 3, text: 'Disse Deus: Haja luz. E houve luz.' },
-  { verse: 4, text: 'Viu Deus que a luz era boa e fez separação entre a luz e as trevas.' },
-  { verse: 5, text: 'E chamou Deus à luz Dia e às trevas, Noite. Houve tarde e manhã, o primeiro dia.' },
-  { verse: 6, text: 'E disse Deus: Haja um firmamento no meio das águas e separação entre águas e águas.' },
-  { verse: 7, text: 'Fez, pois, Deus o firmamento e separação entre as águas debaixo do firmamento e as águas sobre o firmamento. E assim se fez.' },
-  { verse: 8, text: 'E chamou Deus ao firmamento Céus. Houve tarde e manhã, o segundo dia.' },
-  { verse: 9, text: 'Disse também Deus: Ajuntem-se as águas debaixo dos céus num só lugar, e apareça a porção seca. E assim se fez.' },
-  { verse: 10, text: 'À porção seca chamou Deus Terra e ao ajuntamento das águas, Mares. E viu Deus que isso era bom.' },
-  // More verses would be added here
-];
+import { useSubscription } from '@/hooks/useSubscription';
+import { BibleService, bibleBooks, bibleTranslations, BibleChapter } from '@/services/BibleService';
 
 const Bible = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedBook, setSelectedBook] = useState(searchParams.get('book') || 'genesis');
   const [selectedChapter, setSelectedChapter] = useState(parseInt(searchParams.get('chapter') || '1', 10));
   const [isLoading, setIsLoading] = useState(true);
-  const [bibleText, setBibleText] = useState<typeof sampleBibleText>([]);
-  const [selectedVersion, setSelectedVersion] = useState('ara');
+  const [bibleText, setBibleText] = useState<BibleChapter | null>(null);
+  const [selectedVersion, setSelectedVersion] = useState(searchParams.get('version') || 'acf');
+  const { isSubscribed } = useSubscription();
   
   // Find the selected book object
-  const book = booksList.find(b => b.id === selectedBook) || booksList[0];
+  const book = bibleBooks.find(b => b.id === selectedBook) || bibleBooks[0];
   
   // Generate array of chapter numbers based on the selected book
   const chapterNumbers = Array.from({ length: book.chapters }, (_, i) => i + 1);
 
+  // Fetch Bible text when selection changes
+  const fetchBibleText = useCallback(async () => {
+    if (!selectedBook || !selectedChapter) return;
+    
+    setIsLoading(true);
+    try {
+      const chapterData = await BibleService.getChapter(selectedBook, selectedChapter, selectedVersion);
+      setBibleText(chapterData);
+    } catch (error) {
+      console.error('Error fetching Bible text:', error);
+      toast.error('Erro ao carregar o texto bíblico. Tente novamente.');
+      setBibleText(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedBook, selectedChapter, selectedVersion]);
+
+  // Effect to fetch Bible text when selection changes
   useEffect(() => {
-    // In a real app, this would fetch from an API
-    const fetchBibleText = async () => {
-      setIsLoading(true);
-      try {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setBibleText(sampleBibleText);
-      } catch (error) {
-        console.error('Error fetching Bible text:', error);
-        toast.error('Erro ao carregar o texto bíblico. Tente novamente.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
+    // Update URL with current selection first
+    setSearchParams({ 
+      book: selectedBook, 
+      chapter: selectedChapter.toString(),
+      version: selectedVersion
+    });
+    
+    // Fetch the Bible text
     fetchBibleText();
-    // Update URL with current selection
-    setSearchParams({ book: selectedBook, chapter: selectedChapter.toString() });
-  }, [selectedBook, selectedChapter, setSearchParams, selectedVersion]);
+  }, [selectedBook, selectedChapter, selectedVersion, setSearchParams, fetchBibleText]);
 
-  const handlePreviousChapter = () => {
+  const handlePreviousChapter = useCallback(() => {
     if (selectedChapter > 1) {
       setSelectedChapter(selectedChapter - 1);
     } else {
-      const currentIndex = booksList.findIndex(b => b.id === selectedBook);
+      const currentIndex = bibleBooks.findIndex(b => b.id === selectedBook);
       if (currentIndex > 0) {
-        const prevBook = booksList[currentIndex - 1];
+        const prevBook = bibleBooks[currentIndex - 1];
         setSelectedBook(prevBook.id);
         setSelectedChapter(prevBook.chapters);
       }
     }
-  };
+  }, [selectedBook, selectedChapter]);
 
-  const handleNextChapter = () => {
+  const handleNextChapter = useCallback(() => {
     if (selectedChapter < book.chapters) {
       setSelectedChapter(selectedChapter + 1);
     } else {
-      const currentIndex = booksList.findIndex(b => b.id === selectedBook);
-      if (currentIndex < booksList.length - 1) {
-        setSelectedBook(booksList[currentIndex + 1].id);
+      const currentIndex = bibleBooks.findIndex(b => b.id === selectedBook);
+      if (currentIndex < bibleBooks.length - 1) {
+        setSelectedBook(bibleBooks[currentIndex + 1].id);
         setSelectedChapter(1);
       }
     }
+  }, [selectedBook, selectedChapter, book.chapters]);
+
+  const handleSaveBibleOffline = async () => {
+    await BibleService.saveBibleOffline(selectedVersion);
+  };
+
+  const handleVersionChange = (version: string) => {
+    // Verificar se o usuário tem acesso à versão
+    const translation = bibleTranslations.find(t => t.id === version);
+    
+    if (translation?.requiresSubscription && !isSubscribed) {
+      toast.error(`A tradução ${translation.name} está disponível apenas para assinantes.`);
+      return;
+    }
+    
+    setSelectedVersion(version);
   };
 
   return (
@@ -118,7 +124,7 @@ const Bible = () => {
                   <SelectValue placeholder="Selecione um livro" />
                 </SelectTrigger>
                 <SelectContent>
-                  {booksList.map((book) => (
+                  {bibleBooks.map((book) => (
                     <SelectItem key={book.id} value={book.id}>
                       {book.name}
                     </SelectItem>
@@ -144,15 +150,21 @@ const Bible = () => {
             </div>
             
             <div className="flex gap-2">
-              <Select value={selectedVersion} onValueChange={setSelectedVersion}>
+              <Select value={selectedVersion} onValueChange={handleVersionChange}>
                 <SelectTrigger className="w-24">
                   <SelectValue placeholder="Versão" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ara">ARA</SelectItem>
-                  <SelectItem value="acf">ACF</SelectItem>
-                  <SelectItem value="nvi">NVI</SelectItem>
-                  <SelectItem value="kjv">KJV</SelectItem>
+                  {bibleTranslations.map((translation) => (
+                    <SelectItem 
+                      key={translation.id} 
+                      value={translation.id} 
+                      disabled={translation.requiresSubscription && !isSubscribed}
+                    >
+                      {translation.id.toUpperCase()}
+                      {translation.requiresSubscription && !isSubscribed && " 🔒"}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               
@@ -170,11 +182,19 @@ const Bible = () => {
             </div>
           </div>
           
+          <Button 
+            variant="outline" 
+            className="mb-4 w-full flex justify-center items-center gap-2"
+            onClick={handleSaveBibleOffline}
+          >
+            <Download className="h-4 w-4" /> Salvar Bíblia Offline
+          </Button>
+          
           {/* Bible Content */}
           <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
               <h1 className="text-2xl font-bold text-bible-primary dark:text-bible-secondary">
-                {book.name} {selectedChapter}
+                {bibleText?.reference || `${book.name} ${selectedChapter}`}
               </h1>
               <Button variant="ghost" size="icon" onClick={() => toast.success("Capítulo compartilhado!")}>
                 <Share className="h-4 w-4" />
@@ -190,9 +210,9 @@ const Bible = () => {
                     <Skeleton className="h-6 flex-1" />
                   </div>
                 ))
-              ) : (
+              ) : bibleText?.verses?.length ? (
                 // Bible verses
-                bibleText.map((verse) => (
+                bibleText.verses.map((verse) => (
                   <div key={verse.verse} className="flex gap-2 group">
                     <span className="text-bible-secondary font-bold min-w-[24px] text-right">
                       {verse.verse}
@@ -200,6 +220,18 @@ const Bible = () => {
                     <p className="flex-1">{verse.text}</p>
                   </div>
                 ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>Não foi possível carregar o texto bíblico.</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-4"
+                    onClick={fetchBibleText}
+                  >
+                    Tentar novamente
+                  </Button>
+                </div>
               )}
             </div>
           </div>
@@ -209,7 +241,7 @@ const Bible = () => {
             <Button 
               variant="outline" 
               onClick={handlePreviousChapter} 
-              disabled={selectedBook === booksList[0].id && selectedChapter === 1}
+              disabled={selectedBook === bibleBooks[0].id && selectedChapter === 1}
             >
               <ChevronLeft className="h-4 w-4 mr-2" />
               Anterior
@@ -217,8 +249,8 @@ const Bible = () => {
             <Button 
               variant="outline" 
               onClick={handleNextChapter}
-              disabled={selectedBook === booksList[booksList.length - 1].id && 
-                selectedChapter === booksList[booksList.length - 1].chapters}
+              disabled={selectedBook === bibleBooks[bibleBooks.length - 1].id && 
+                selectedChapter === bibleBooks[bibleBooks.length - 1].chapters}
             >
               Próximo
               <ChevronRight className="h-4 w-4 ml-2" />

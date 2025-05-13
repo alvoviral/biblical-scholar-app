@@ -1,127 +1,204 @@
 
-import { useState, useEffect } from 'react';
+import { create } from 'zustand';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+// Define os níveis de assinatura disponíveis
 export type SubscriptionTier = 'free' | 'basic' | 'premium';
 
-export interface Subscription {
-  subscribed: boolean;
-  subscription_tier: SubscriptionTier;
-  subscription_end: string | null;
+// Interface para o estado da assinatura
+interface SubscriptionState {
+  isLoading: boolean;
+  isSubscribed: boolean;
+  tier: SubscriptionTier;
+  expiresAt: Date | null;
+  
+  // Ações
+  subscribe: (tier: SubscriptionTier) => Promise<void>;
+  cancelSubscription: () => Promise<void>;
+  checkSubscription: () => Promise<void>;
 }
 
-export const useSubscription = () => {
-  const { user } = useAuth();
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  const checkSubscription = async (): Promise<Subscription | null> => {
-    if (!user) {
-      setSubscription(null);
-      setIsLoading(false);
-      return null;
-    }
-
-    try {
-      setIsLoading(true);
-      // In a real app, this would call an edge function to check with payment provider
-      // For now, we'll just check the database
-      const { data, error } = await supabase
-        .from('subscribers')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (error) {
-        console.error('Error fetching subscription:', error);
-        return null;
-      }
-
-      if (data) {
-        // Cast the string to the correct type to ensure it's a valid SubscriptionTier
-        const subscriptionTier = data.subscription_tier as SubscriptionTier || 'free';
-        
-        const subscriptionData: Subscription = {
-          subscribed: data.subscribed,
-          subscription_tier: subscriptionTier,
-          subscription_end: data.subscription_end,
-        };
-        setSubscription(subscriptionData);
-        return subscriptionData;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error checking subscription:', error);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const createCheckoutSession = async (plan: 'basic' | 'premium'): Promise<boolean> => {
-    if (!user) return false;
+// Cria um store Zustand para gerenciar o estado da assinatura
+export const useSubscriptionStore = create<SubscriptionState>((set) => ({
+  isLoading: false,
+  isSubscribed: false,
+  tier: 'free',
+  expiresAt: null,
+  
+  subscribe: async (tier) => {
+    set({ isLoading: true });
     
     try {
-      setIsLoading(true);
+      // Simula uma chamada à API para processar a assinatura
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // In a real app, this would call an edge function to create a checkout session
-      // For now, we'll simulate a subscription by updating the database directly
+      // Define data de expiração (30 dias a partir de hoje)
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
       
-      // This is a placeholder - in a real app, this would be replaced with actual payment processing
-      toast.info("Em breve disponível. Estamos em desenvolvimento!");
+      // Atualiza o estado da assinatura
+      set({
+        isSubscribed: true,
+        tier,
+        expiresAt,
+        isLoading: false
+      });
       
-      // For demo purposes, let's simulate a successful subscription
-      // In production, you would integrate with Mercado Pago or Stripe
-      const { error } = await supabase
-        .from('subscribers')
-        .upsert({
-          user_id: user.id,
-          email: user.email,
-          subscribed: true,
-          subscription_tier: plan,
-          subscription_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
-
-      if (error) {
-        console.error('Error creating subscription:', error);
-        return false;
-      }
+      // Salva na localStorage para persistência
+      localStorage.setItem('app-subscription', JSON.stringify({
+        isSubscribed: true,
+        tier,
+        expiresAt: expiresAt.toISOString()
+      }));
       
-      // Refresh subscription data
-      await checkSubscription();
-      return true;
+      toast.success(`Assinatura ${tier} ativada com sucesso!`);
     } catch (error) {
-      console.error('Error creating checkout session:', error);
-      return false;
-    } finally {
-      setIsLoading(false);
+      set({ isLoading: false });
+      console.error('Erro ao processar assinatura:', error);
+      toast.error('Não foi possível processar sua assinatura. Tente novamente.');
     }
-  };
-
-  const manageSubscription = async (): Promise<boolean> => {
-    // In a real app, this would open a customer portal session
-    toast.info("Gerenciamento de assinaturas em breve disponível!");
-    return true;
-  };
-
-  useEffect(() => {
-    if (user) {
-      checkSubscription();
-    } else {
-      setSubscription(null);
-      setIsLoading(false);
+  },
+  
+  cancelSubscription: async () => {
+    set({ isLoading: true });
+    
+    try {
+      // Simula uma chamada à API para cancelar a assinatura
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Atualiza o estado da assinatura
+      set({
+        isSubscribed: false,
+        tier: 'free',
+        expiresAt: null,
+        isLoading: false
+      });
+      
+      // Atualiza localStorage
+      localStorage.setItem('app-subscription', JSON.stringify({
+        isSubscribed: false,
+        tier: 'free',
+        expiresAt: null
+      }));
+      
+      toast.success('Sua assinatura foi cancelada.');
+    } catch (error) {
+      set({ isLoading: false });
+      console.error('Erro ao cancelar assinatura:', error);
+      toast.error('Não foi possível cancelar sua assinatura. Tente novamente.');
     }
-  }, [user]);
+  },
+  
+  checkSubscription: async () => {
+    set({ isLoading: true });
+    
+    try {
+      // Verifica se há dados salvos no localStorage
+      const savedData = localStorage.getItem('app-subscription');
+      
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        
+        // Verifica se a assinatura expirou
+        const expiresAt = parsed.expiresAt ? new Date(parsed.expiresAt) : null;
+        const isExpired = expiresAt ? new Date() > expiresAt : true;
+        
+        if (isExpired && parsed.isSubscribed) {
+          // Assinatura expirada
+          set({
+            isSubscribed: false,
+            tier: 'free',
+            expiresAt: null,
+            isLoading: false
+          });
+          
+          // Atualiza localStorage
+          localStorage.setItem('app-subscription', JSON.stringify({
+            isSubscribed: false,
+            tier: 'free',
+            expiresAt: null
+          }));
+          
+          toast.error('Sua assinatura expirou.');
+        } else {
+          // Atualiza com os dados salvos
+          set({
+            isSubscribed: parsed.isSubscribed,
+            tier: parsed.tier as SubscriptionTier || 'free',
+            expiresAt: expiresAt,
+            isLoading: false
+          });
+        }
+      } else {
+        // Sem dados salvos, define como não assinante
+        set({
+          isSubscribed: false,
+          tier: 'free',
+          expiresAt: null,
+          isLoading: false
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao verificar assinatura:', error);
+      set({
+        isLoading: false,
+        isSubscribed: false,
+        tier: 'free',
+        expiresAt: null
+      });
+    }
+  }
+}));
 
-  return {
-    subscription,
+// Hook React para usar o estado da assinatura em componentes
+export const useSubscription = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  
+  const {
     isLoading,
-    checkSubscription,
-    createCheckoutSession,
-    manageSubscription,
+    isSubscribed,
+    tier,
+    expiresAt,
+    subscribe,
+    cancelSubscription,
+    checkSubscription
+  } = useSubscriptionStore();
+  
+  const [initialized, setInitialized] = useState(false);
+  
+  // Verificar assinatura quando o componente monta ou o usuário muda
+  useEffect(() => {
+    if (!initialized) {
+      checkSubscription();
+      setInitialized(true);
+    }
+  }, [initialized, checkSubscription]);
+  
+  // Função para assinar com verificação de login
+  const handleSubscribe = async (tier: SubscriptionTier) => {
+    if (!user) {
+      toast.error('Faça login para assinar um plano');
+      navigate('/auth?redirect=/planos');
+      return;
+    }
+    
+    await subscribe(tier);
+  };
+  
+  return {
+    isLoading,
+    isSubscribed,
+    tier,
+    expiresAt,
+    subscribe: handleSubscribe,
+    cancelSubscription,
+    checkSubscription
   };
 };
+
+// Para acesso fora de componentes React
+useSubscription.getState = useSubscriptionStore.getState;

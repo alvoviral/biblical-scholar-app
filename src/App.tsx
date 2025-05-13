@@ -11,6 +11,7 @@ import Harpa from "./pages/Harpa";
 import AITheology from "./pages/AITheology";
 import DailyBread from "./pages/DailyBread";
 import AuthPage from "./pages/AuthPage";
+import Plans from "./pages/Plans";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/ia-teologica" element={<AITheology />} />
             <Route path="/pao-diario" element={<DailyBread />} />
             <Route path="/auth" element={<AuthPage />} />
+            <Route path="/planos" element={<Plans />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

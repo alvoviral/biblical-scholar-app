@@ -17,6 +17,8 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Link } from 'react-router-dom';
+import { useSubscription } from '@/hooks/useSubscription';
 
 const DailyVerse = () => {
   return (
@@ -63,6 +65,7 @@ const AppPromoBanner = () => {
 
 const Index = () => {
   const { user } = useAuth();
+  const { subscription } = useSubscription();
   
   return (
     <div className="min-h-screen flex flex-col">
@@ -160,9 +163,31 @@ const Index = () => {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button variant="default" className="w-full" onClick={() => toast.info("Em breve disponível. Estamos em desenvolvimento!")}>
-                  Ver Assinaturas
-                </Button>
+                <Link to="/planos" className="w-full">
+                  <Button variant="default" className="w-full">
+                    Ver Assinaturas
+                  </Button>
+                </Link>
+              </CardFooter>
+            </Card>
+          </section>
+        )}
+
+        {user && !subscription?.subscribed && (
+          <section className="my-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Desbloqueie recursos premium</CardTitle>
+                <CardDescription>
+                  Acesse recursos avançados com a assinatura Básica ou Premium.
+                </CardDescription>
+              </CardHeader>
+              <CardFooter>
+                <Link to="/planos" className="w-full">
+                  <Button variant="default" className="w-full">
+                    Ver Assinaturas
+                  </Button>
+                </Link>
               </CardFooter>
             </Card>
           </section>

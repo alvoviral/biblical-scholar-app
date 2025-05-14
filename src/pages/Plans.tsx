@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { toast } from "sonner";
@@ -7,31 +7,107 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Loader2, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 const Plans = () => {
   const { user } = useAuth();
-  const { isSubscribed, tier, createCheckoutSession, isLoading } = useSubscription();
+  const { isSubscribed, tier, subscribe, isLoading } = useSubscription();
   const navigate = useNavigate();
+  const location = useLocation();
   const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+
+  // Handle payment return from Mercado Pago
+  useEffect(() => {
+    const handlePaymentReturn = async () => {
+      const searchParams = new URLSearchParams(location.search);
+      const status = searchParams.get('status');
+      const plan = searchParams.get('plan');
+      const userId = searchParams.get('user');
+      
+      if (status && plan && userId && status === 'success') {
+        try {
+          // Call the handle-subscription function
+          const response = await fetch(
+            'https://oregxnkiwqaojyxervir.supabase.co/functions/v1/handle-subscription',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${supabase.auth.session()?.access_token || ''}`,
+              },
+              body: JSON.stringify({
+                user_id: userId,
+                plan: plan,
+                status: status,
+              }),
+            }
+          );
+          
+          const result = await response.json();
+          
+          if (response.ok) {
+            // Activate the subscription in the frontend
+            await subscribe(plan as any);
+            toast.success(`Assinatura ${plan === 'basic' ? 'Básica' : 'Premium'} ativada com sucesso!`);
+            navigate("/");
+          } else {
+            toast.error("Erro ao ativar assinatura: " + result.error);
+          }
+        } catch (error) {
+          console.error("Erro ao processar retorno do pagamento:", error);
+          toast.error("Erro ao processar pagamento. Tente novamente.");
+        }
+        
+        // Clear URL parameters
+        navigate('/planos', { replace: true });
+      } else if (status === 'failure') {
+        toast.error("O pagamento não foi concluído. Tente novamente.");
+        navigate('/planos', { replace: true });
+      } else if (status === 'pending') {
+        toast.info("Pagamento pendente. Você receberá uma confirmação quando for aprovado.");
+        navigate('/planos', { replace: true });
+      }
+    };
+    
+    if (location.search) {
+      handlePaymentReturn();
+    }
+  }, [location.search, navigate, subscribe]);
 
   const handleSubscription = async (plan: 'basic' | 'premium') => {
     if (!user) {
       toast.error("Você precisa estar logado para assinar um plano");
-      navigate("/auth");
+      navigate("/auth?redirect=/planos");
       return;
     }
 
     try {
       setProcessingPlan(plan);
-      if (createCheckoutSession) {
-        const success = await createCheckoutSession(plan);
-        if (success) {
-          toast.success(`Assinatura ${plan === 'basic' ? 'Básica' : 'Premium'} realizada com sucesso!`);
-          navigate("/");
+      
+      // Call Mercado Pago integration function
+      const response = await fetch(
+        'https://oregxnkiwqaojyxervir.supabase.co/functions/v1/create-payment',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            plan: plan,
+            userId: user.id,
+            returnUrl: `${window.location.origin}/planos`,
+          }),
         }
+      );
+      
+      const result = await response.json();
+      
+      if (response.ok && result.init_point) {
+        // Redirect to Mercado Pago checkout
+        window.location.href = result.init_point;
       } else {
-        toast.error("Serviço de pagamento indisponível no momento");
+        toast.error("Erro ao processar pagamento: " + (result.error || "Erro desconhecido"));
       }
     } catch (error) {
       console.error("Erro ao processar assinatura:", error);

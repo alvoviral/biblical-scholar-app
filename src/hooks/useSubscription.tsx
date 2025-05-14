@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 // Define os níveis de assinatura disponíveis
 export type SubscriptionTier = 'free' | 'basic' | 'premium';
@@ -14,13 +15,12 @@ interface SubscriptionState {
   isSubscribed: boolean;
   tier: SubscriptionTier;
   expiresAt: Date | null;
-  subscription_tier?: SubscriptionTier; // For backward compatibility
   
   // Ações
   subscribe: (tier: SubscriptionTier) => Promise<void>;
   cancelSubscription: () => Promise<void>;
   checkSubscription: () => Promise<void>;
-  createCheckoutSession?: (plan: 'basic' | 'premium') => Promise<boolean>;
+  createCheckoutSession: (plan: 'basic' | 'premium') => Promise<boolean>;
 }
 
 // Cria um store Zustand para gerenciar o estado da assinatura
@@ -34,8 +34,18 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
     set({ isLoading: true });
     
     try {
-      // Simula uma chamada à API para processar a assinatura
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Check if we are using Supabase
+      if (supabase) {
+        const user = supabase.auth.user();
+        if (user) {
+          // Set expiry date (30 days from now)
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 30);
+          
+          // In a real implementation, this would communicate with the backend
+          // For now, we'll just simulate a successful update
+        }
+      }
       
       // Define data de expiração (30 dias a partir de hoje)
       const expiresAt = new Date();
@@ -45,7 +55,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
       set({
         isSubscribed: true,
         tier,
-        subscription_tier: tier, // Add for backward compatibility
         expiresAt,
         isLoading: false
       });
@@ -54,7 +63,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
       localStorage.setItem('app-subscription', JSON.stringify({
         isSubscribed: true,
         tier,
-        subscription_tier: tier, // Add for backward compatibility
         expiresAt: expiresAt.toISOString()
       }));
       
@@ -77,7 +85,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
       set({
         isSubscribed: false,
         tier: 'free',
-        subscription_tier: 'free', // Add for backward compatibility
         expiresAt: null,
         isLoading: false
       });
@@ -86,7 +93,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
       localStorage.setItem('app-subscription', JSON.stringify({
         isSubscribed: false,
         tier: 'free',
-        subscription_tier: 'free', // Add for backward compatibility
         expiresAt: null
       }));
       
@@ -117,7 +123,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
           set({
             isSubscribed: false,
             tier: 'free',
-            subscription_tier: 'free', // Add for backward compatibility
             expiresAt: null,
             isLoading: false
           });
@@ -126,7 +131,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
           localStorage.setItem('app-subscription', JSON.stringify({
             isSubscribed: false,
             tier: 'free',
-            subscription_tier: 'free', // Add for backward compatibility
             expiresAt: null
           }));
           
@@ -136,7 +140,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
           set({
             isSubscribed: parsed.isSubscribed,
             tier: parsed.tier as SubscriptionTier || 'free',
-            subscription_tier: parsed.tier as SubscriptionTier || 'free', // Add for backward compatibility
             expiresAt: expiresAt,
             isLoading: false
           });
@@ -146,7 +149,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
         set({
           isSubscribed: false,
           tier: 'free',
-          subscription_tier: 'free', // Add for backward compatibility
           expiresAt: null,
           isLoading: false
         });
@@ -157,31 +159,34 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
         isLoading: false,
         isSubscribed: false,
         tier: 'free',
-        subscription_tier: 'free', // Add for backward compatibility
         expiresAt: null
       });
     }
-  }
-}));
-
-// Add a mock implementation for createCheckoutSession
-useSubscriptionStore.setState({
+  },
+  
   createCheckoutSession: async (plan: 'basic' | 'premium') => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const user = supabase?.auth?.user();
       
-      // Update subscription based on the plan
-      const tier = plan as SubscriptionTier;
+      if (!user) {
+        toast.error('Você precisa estar logado para assinar um plano');
+        return false;
+      }
+      
+      set({ isLoading: true });
+      
+      // In a production environment, this would call your backend payment endpoint
+      // For now, we'll just simulate a successful payment
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Set expiry date (30 days from now)
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30);
       
-      useSubscriptionStore.setState({
+      // Update subscription state
+      set({
         isSubscribed: true,
-        tier,
-        subscription_tier: tier,
+        tier: plan,
         expiresAt,
         isLoading: false
       });
@@ -189,18 +194,18 @@ useSubscriptionStore.setState({
       // Save to localStorage
       localStorage.setItem('app-subscription', JSON.stringify({
         isSubscribed: true,
-        tier,
-        subscription_tier: tier,
+        tier: plan,
         expiresAt: expiresAt.toISOString()
       }));
       
       return true;
     } catch (error) {
-      console.error('Error processing checkout:', error);
+      set({ isLoading: false });
+      console.error('Error processing payment:', error);
       return false;
     }
   }
-});
+}));
 
 // Hook React para usar o estado da assinatura em componentes
 export const useSubscription = () => {
@@ -211,7 +216,6 @@ export const useSubscription = () => {
     isLoading,
     isSubscribed,
     tier,
-    subscription_tier,
     expiresAt,
     subscribe,
     cancelSubscription,
@@ -246,7 +250,7 @@ export const useSubscription = () => {
     tier,
     subscription: {
       subscribed: isSubscribed,
-      subscription_tier: subscription_tier || tier
+      subscription_tier: tier
     },
     expiresAt,
     subscribe: handleSubscribe,

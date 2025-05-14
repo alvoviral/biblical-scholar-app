@@ -13,6 +13,10 @@ import DailyBread from "./pages/DailyBread";
 import AuthPage from "./pages/AuthPage";
 import Plans from "./pages/Plans";
 import NotFound from "./pages/NotFound";
+import Notes from "./pages/Notes";
+import Tools from "./pages/Tools";
+import Sermons from "./pages/Sermons";
+import Community from "./pages/Community";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +35,10 @@ const App = () => (
             <Route path="/pao-diario" element={<DailyBread />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/planos" element={<Plans />} />
+            <Route path="/anotacoes" element={<Notes />} />
+            <Route path="/ferramentas" element={<Tools />} />
+            <Route path="/pregacoes" element={<Sermons />} />
+            <Route path="/comunidade" element={<Community />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

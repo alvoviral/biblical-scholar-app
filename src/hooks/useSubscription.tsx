@@ -14,11 +14,13 @@ interface SubscriptionState {
   isSubscribed: boolean;
   tier: SubscriptionTier;
   expiresAt: Date | null;
+  subscription_tier?: SubscriptionTier; // For backward compatibility
   
   // Ações
   subscribe: (tier: SubscriptionTier) => Promise<void>;
   cancelSubscription: () => Promise<void>;
   checkSubscription: () => Promise<void>;
+  createCheckoutSession?: (plan: 'basic' | 'premium') => Promise<boolean>;
 }
 
 // Cria um store Zustand para gerenciar o estado da assinatura
@@ -43,6 +45,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
       set({
         isSubscribed: true,
         tier,
+        subscription_tier: tier, // Add for backward compatibility
         expiresAt,
         isLoading: false
       });
@@ -51,6 +54,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
       localStorage.setItem('app-subscription', JSON.stringify({
         isSubscribed: true,
         tier,
+        subscription_tier: tier, // Add for backward compatibility
         expiresAt: expiresAt.toISOString()
       }));
       
@@ -73,6 +77,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
       set({
         isSubscribed: false,
         tier: 'free',
+        subscription_tier: 'free', // Add for backward compatibility
         expiresAt: null,
         isLoading: false
       });
@@ -81,6 +86,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
       localStorage.setItem('app-subscription', JSON.stringify({
         isSubscribed: false,
         tier: 'free',
+        subscription_tier: 'free', // Add for backward compatibility
         expiresAt: null
       }));
       
@@ -111,6 +117,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
           set({
             isSubscribed: false,
             tier: 'free',
+            subscription_tier: 'free', // Add for backward compatibility
             expiresAt: null,
             isLoading: false
           });
@@ -119,6 +126,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
           localStorage.setItem('app-subscription', JSON.stringify({
             isSubscribed: false,
             tier: 'free',
+            subscription_tier: 'free', // Add for backward compatibility
             expiresAt: null
           }));
           
@@ -128,6 +136,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
           set({
             isSubscribed: parsed.isSubscribed,
             tier: parsed.tier as SubscriptionTier || 'free',
+            subscription_tier: parsed.tier as SubscriptionTier || 'free', // Add for backward compatibility
             expiresAt: expiresAt,
             isLoading: false
           });
@@ -137,6 +146,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
         set({
           isSubscribed: false,
           tier: 'free',
+          subscription_tier: 'free', // Add for backward compatibility
           expiresAt: null,
           isLoading: false
         });
@@ -147,11 +157,50 @@ export const useSubscriptionStore = create<SubscriptionState>((set) => ({
         isLoading: false,
         isSubscribed: false,
         tier: 'free',
+        subscription_tier: 'free', // Add for backward compatibility
         expiresAt: null
       });
     }
   }
 }));
+
+// Add a mock implementation for createCheckoutSession
+useSubscriptionStore.setState({
+  createCheckoutSession: async (plan: 'basic' | 'premium') => {
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Update subscription based on the plan
+      const tier = plan as SubscriptionTier;
+      
+      // Set expiry date (30 days from now)
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      
+      useSubscriptionStore.setState({
+        isSubscribed: true,
+        tier,
+        subscription_tier: tier,
+        expiresAt,
+        isLoading: false
+      });
+      
+      // Save to localStorage
+      localStorage.setItem('app-subscription', JSON.stringify({
+        isSubscribed: true,
+        tier,
+        subscription_tier: tier,
+        expiresAt: expiresAt.toISOString()
+      }));
+      
+      return true;
+    } catch (error) {
+      console.error('Error processing checkout:', error);
+      return false;
+    }
+  }
+});
 
 // Hook React para usar o estado da assinatura em componentes
 export const useSubscription = () => {
@@ -162,10 +211,12 @@ export const useSubscription = () => {
     isLoading,
     isSubscribed,
     tier,
+    subscription_tier,
     expiresAt,
     subscribe,
     cancelSubscription,
-    checkSubscription
+    checkSubscription,
+    createCheckoutSession
   } = useSubscriptionStore();
   
   const [initialized, setInitialized] = useState(false);
@@ -193,10 +244,15 @@ export const useSubscription = () => {
     isLoading,
     isSubscribed,
     tier,
+    subscription: {
+      subscribed: isSubscribed,
+      subscription_tier: subscription_tier || tier
+    },
     expiresAt,
     subscribe: handleSubscribe,
     cancelSubscription,
-    checkSubscription
+    checkSubscription,
+    createCheckoutSession
   };
 };
 

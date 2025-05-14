@@ -1,4 +1,3 @@
-
 import React from 'react';
 import Header from '@/components/Header';
 import FeatureIcon from '@/components/FeatureIcon';
@@ -65,7 +64,7 @@ const AppPromoBanner = () => {
 
 const Index = () => {
   const { user } = useAuth();
-  const { subscription } = useSubscription();
+  const { isSubscribed } = useSubscription();
   
   return (
     <div className="min-h-screen flex flex-col">
@@ -173,7 +172,7 @@ const Index = () => {
           </section>
         )}
 
-        {user && !subscription?.subscribed && (
+        {user && !isSubscribed && (
           <section className="my-6">
             <Card>
               <CardHeader>

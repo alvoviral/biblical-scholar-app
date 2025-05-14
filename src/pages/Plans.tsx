@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 
 const Plans = () => {
   const { user } = useAuth();
-  const { subscription, createCheckoutSession, isLoading } = useSubscription();
+  const { isSubscribed, tier, createCheckoutSession, isLoading } = useSubscription();
   const navigate = useNavigate();
   const [processingPlan, setProcessingPlan] = useState<string | null>(null);
 
@@ -24,10 +24,14 @@ const Plans = () => {
 
     try {
       setProcessingPlan(plan);
-      const success = await createCheckoutSession(plan);
-      if (success) {
-        toast.success(`Assinatura ${plan === 'basic' ? 'Básica' : 'Premium'} realizada com sucesso!`);
-        navigate("/");
+      if (createCheckoutSession) {
+        const success = await createCheckoutSession(plan);
+        if (success) {
+          toast.success(`Assinatura ${plan === 'basic' ? 'Básica' : 'Premium'} realizada com sucesso!`);
+          navigate("/");
+        }
+      } else {
+        toast.error("Serviço de pagamento indisponível no momento");
       }
     } catch (error) {
       console.error("Erro ao processar assinatura:", error);
@@ -37,8 +41,8 @@ const Plans = () => {
     }
   };
 
-  const isBasicPlan = subscription?.subscription_tier === 'basic';
-  const isPremiumPlan = subscription?.subscription_tier === 'premium';
+  const isBasicPlan = tier === 'basic';
+  const isPremiumPlan = tier === 'premium';
 
   return (
     <div className="min-h-screen flex flex-col">
